@@ -1,88 +1,139 @@
-### AnyKernel3 Ramdisk Mod Script
-## osm0sis @ xda-developers
+# AnyKernel3 Ramdisk Mod Script
+# osm0sis @ xda-developers
 
-### AnyKernel setup
+## AnyKernel setup
 # begin properties
 properties() { '
-kernel.string=RenoAce Kernel by Genisys @ coolapk
+kernel.string=not_Kernel by @Ost268
 do.devicecheck=1
 do.modules=0
 do.systemless=1
 do.cleanup=1
 do.cleanuponabort=0
-device.name1=OP4A89
-device.name2=PCLM10
-device.name3=19081
+device.name1=gts6lwifi
+device.name2=gts6lwifixx
+device.name3=gts6lwifixxx
+device.name4=gts6l
+device.name5=gts6lxxx
+supported.versions=13 - 15
+supported.patchlevels=
 '; } # end properties
 
-### AnyKernel install
-# begin attributes
-attributes() {
-set_perm_recursive 0 0 755 644 $ramdisk/*;
-set_perm_recursive 0 0 750 750 $ramdisk/init* $ramdisk/sbin;
-} # end attributes
-
-
-## boot shell variables
-block=/dev/block/by-name/boot;
+# shell variables
+block=/dev/block/platform/soc/1d84000.ufshc/by-name/boot;
 is_slot_device=0;
 ramdisk_compression=auto;
-patch_vbmeta_flag=auto;
 
-# import functions/variables and setup patching - see for reference (DO NOT REMOVE)
-. tools/ak3-core.sh && attributes;
 
-# boot install
-dump_boot; # use split_boot to skip ramdisk unpack, e.g. for devices with init_boot ramdisk
+## AnyKernel methods (DO NOT CHANGE)
+# import patching functions/variables - see for reference
+. tools/ak3-core.sh;
 
-write_boot; # use flash_boot to skip ramdisk repack, e.g. for devices with init_boot ramdisk
+
+## AnyKernel file attributes
+# set permissions/ownership for included ramdisk files
+set_perm_recursive 0 0 755 644 $ramdisk/*;
+set_perm_recursive 0 0 750 750 $ramdisk/init* $ramdisk/sbin;
+
+## AnyKernel boot install
+dump_boot;
+
+# begin dtb changes
+
+android=$(file_getprop /system/build.prop ro.system.build.version.release);
+if [ $android == 14 ]; then
+    ui_print " "
+    ui_print " • Using A14 Device Tree Blob • "
+    mv $home/a14.dtb $home/dtb
+elif [ $android == 15 ]; then
+    ui_print " "
+    ui_print " • Using A15 Device Tree Blob • "
+    mv $home/a15.dtb $home/dtb
+elif [ $android == 13 ]; then
+    ui_print " "
+    ui_print " • Using A13 Device Tree Blob • "
+    mv $home/a13.dtb $home/dtb
+fi
+
+# end dtb changes
+
+# begin cmdline-ksu changes
+
+case "$ZIPFILE" in
+   *-noksu*)
+    ui_print " "
+    ui_print " • Disable KSU Option detected • "
+    ui_print " "
+    ui_print " • Disabling KSU • "
+    patch_cmdline "enable_kernelsu" "enable_kernelsu=0";
+    ;;
+   *)
+    ui_print " "
+    ui_print " • Default KSU Option detected • "
+    ui_print " "
+    ui_print " • Enabling KSU • "
+    patch_cmdline "enable_kernelsu" "enable_kernelsu=1";
+    ;;
+esac
+
+#end cmdline-ksu changes
+
+# begin cmdline changes
+
+oneui=$(file_getprop /system/build.prop ro.build.version.oneui);
+gsi=$(file_getprop /system/build.prop ro.product.system.device);
+if [ -n "$oneui" ]; then
+   ui_print " "
+   ui_print " • OneUI ROM detected! • "
+   ui_print " "
+   ui_print " • Patching Fingerprint Sensor... • "
+   patch_cmdline "android.is_aosp" "android.is_aosp=0";
+   mv $home/ImageA $home/Image
+elif [ $gsi == "generic" ]; then
+   ui_print " "
+   ui_print " • GSI ROM detected! • "
+   ui_print " "
+   ui_print " • Patching Fingerprint Sensor... • "
+   patch_cmdline "android.is_aosp" "android.is_aosp=0";
+   mv $home/ImageA $home/Image
+else
+   ui_print " "
+   ui_print " • AOSP ROM detected! • "
+   ui_print " "
+   ui_print " • Patching CMDline... • "
+   patch_cmdline "androidboot.verifiedbootstate=orange" "androidboot.verifiedbootstate=green"
+   ui_print " "
+   ui_print " • Patching Props... • "
+   resetprop -n ro.boot.vbmeta.avb_version 4.0
+   resetprop -n ro.boot.vbmeta.device_state locked
+   resetprop -n ro.boot.vbmeta.hash_alg sha256
+   resetprop -n ro.boot.vbmeta.invalidate_on_error yes
+   resetprop -n ro.boot.vbmeta.size 17472
+   resetprop -n ro.boot.vbmeta.device_state locked
+   resetprop -n ro.boot.verifiedbootstate green
+   resetprop -n ro.boot.flash.locked 1
+   resetprop -n ro.boot.veritymode enforcing
+   resetprop -n ro.boot.warranty_bit 0
+   resetprop -n ro.warranty_bit 0
+   resetprop -n ro.debuggable 0
+   resetprop -n ro.force.debuggable 0
+   resetprop -n ro.secure 1
+   resetprop -n ro.adb.secure 1
+   resetprop -n ro.build.type user
+   resetprop -n ro.build.tags release-keys
+   resetprop -n ro.vendor.boot.warranty_bit 0
+   resetprop -n ro.vendor.warranty_bit 0
+   resetprop -n vendor.boot.vbmeta.device_state locked
+   resetprop -n ro.secureboot.lockstate locked
+   resetprop -n vendor.boot.verifiedbootstate green
+   ui_print " "
+   ui_print " • Patching Fingerprint Sensor... • "
+   patch_cmdline "android.is_aosp" "android.is_aosp=1";
+   mv $home/ImageA $home/Image
+fi
+
+# end cmdline changes
+
+write_boot;
 ## end boot install
-
-
-## init_boot shell variables
-#block=init_boot;
-#is_slot_device=1;
-#ramdisk_compression=auto;
-#patch_vbmeta_flag=auto;
-
-# reset for init_boot patching
-#reset_ak;
-
-# init_boot install
-#dump_boot; # unpack ramdisk since it is the new first stage init ramdisk where overlay.d must go
-
-#write_boot;
-## end init_boot install
-
-
-## vendor_kernel_boot shell variables
-#block=vendor_kernel_boot;
-#is_slot_device=1;
-#ramdisk_compression=auto;
-#patch_vbmeta_flag=auto;
-
-# reset for vendor_kernel_boot patching
-#reset_ak;
-
-# vendor_kernel_boot install
-#split_boot; # skip unpack/repack ramdisk, e.g. for dtb on devices with hdr v4 and vendor_kernel_boot
-
-#flash_boot;
-## end vendor_kernel_boot install
-
-
-## vendor_boot shell variables
-#block=vendor_boot;
-#is_slot_device=1;
-#ramdisk_compression=auto;
-#patch_vbmeta_flag=auto;
-
-# reset for vendor_boot patching
-#reset_ak;
-
-# vendor_boot install
-#dump_boot; # use split_boot to skip ramdisk unpack, e.g. for dtb on devices with hdr v4 but no vendor_kernel_boot
-
-#write_boot; # use flash_boot to skip ramdisk repack, e.g. for dtb on devices with hdr v4 but no vendor_kernel_boot
-## end vendor_boot install
-
+exit 0
